@@ -265,6 +265,38 @@ test.describe('Commands', () => {
   });
 });
 
+test.describe('Unavailable formatter', () => {
+  test.use({
+    mockSettings: {
+      ...galata.DEFAULT_SETTINGS,
+      'jupyterlab_code_formatter:settings': {
+        preferences: { default_formatter: { python: 'asdf' } }
+      }
+    }
+  });
+
+  test('should report the error sent by the server', async ({
+    page,
+    tmpPath
+  }) => {
+    const path = `${tmpPath}/unavailable.ipynb`;
+    await openNotebook(page, path, ['a  =  1']);
+
+    await expect(
+      executeCommand(page, 'jupyterlab_code_formatter:format_all', { path })
+    ).rejects.toThrow(/Formatter 'asdf' is unknown/);
+
+    // the failure should also be reported to the user
+    await expect(page.locator('.jp-Dialog')).toContainText(
+      "Formatter 'asdf' is unknown"
+    );
+    await page.locator('.jp-Dialog .jp-Dialog-button').click();
+
+    // the cell should be left untouched
+    expect(await page.notebook.getCellTextInput(0)).toBe('a  =  1');
+  });
+});
+
 test.describe('Format on save', () => {
   test.use({
     mockSettings: {

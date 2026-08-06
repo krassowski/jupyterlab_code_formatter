@@ -11,7 +11,7 @@ import pytest
 from jsonschema import validate
 from tornado.httpclient import HTTPResponse
 
-from jupyterlab_code_formatter.formatters import SERVER_FORMATTERS
+from jupyterlab_code_formatter.formatters import SERVER_FORMATTERS, BlackFormatter
 
 try:
     import rpy2
@@ -106,6 +106,28 @@ async def test_404_on_unknown(request_format):  # type: ignore[no-untyped-def]
         raise_error=False,
     )
     assert response.code == 404
+    # the reason has to be in the JSON body for the client to be able to show it
+    message = json.loads(response.body)["message"]
+    assert "UNKNOWN" in message
+    assert "unknown" in message
+    assert "black" in message
+
+
+async def test_404_on_unavailable(request_format, monkeypatch):  # type: ignore[no-untyped-def]
+    """Check that a formatter which is known but not installed is reported as such."""
+    monkeypatch.setattr(BlackFormatter, "importable", property(lambda self: False))
+
+    response: HTTPResponse = await request_format(
+        formatter="black",
+        code=[SIMPLE_VALID_PYTHON_CODE],
+        options={},
+        raise_error=False,
+    )
+
+    assert response.code == 404
+    message = json.loads(response.body)["message"]
+    assert "black" in message
+    assert "not available" in message
 
 
 async def test_can_apply_python_formatter(request_format):  # type: ignore[no-untyped-def]

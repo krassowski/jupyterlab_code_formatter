@@ -13,14 +13,11 @@ class JupyterlabCodeFormatterClient {
         method
       },
       settings
-    ).then(response => {
+    ).then(async response => {
       if (response.status !== 200) {
-        return response.text().then(() => {
-          throw new ServerConnection.ResponseError(
-            response,
-            response.statusText
-          );
-        });
+        // `create` extracts the `message` of the JSON error response sent by
+        // the server, falling back on the status code if there is none.
+        throw await ServerConnection.ResponseError.create(response);
       }
       return response.text();
     });
