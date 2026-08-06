@@ -193,9 +193,9 @@ def handle_line_ending_and_magic(func):
 
         language = getattr(self, "language", "python").lower()
         escapers = [
-            escaper_cls(code)
-            for escaper_cls in ESCAPER_CLASSES
-            if language in escaper_cls.langs
+            escaper
+            for escaper in (escaper_cls(code) for escaper_cls in ESCAPER_CLASSES)
+            if language in escaper.langs
         ]
 
         lines = code.splitlines()
