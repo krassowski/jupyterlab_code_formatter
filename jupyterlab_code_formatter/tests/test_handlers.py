@@ -558,6 +558,34 @@ async def test_can_use_styler6(request_format):  # type: ignore[no-untyped-def]
     assert json_result["code"][0]["code"] == expected
 
 
+@skip_if_missing_rpy2
+@pytest.mark.parametrize(
+    "formatter,options",
+    (("styler", {}), ("formatR", {"indent": 2})),
+)
+async def test_will_not_escape_ipython_syntax_in_r(request_format, formatter, options):  # type: ignore[no-untyped-def]
+    """Check that IPython-only escaping is not applied to R code.
+
+    `!x` is negation in R, escaping it as a comment used to leave behind the
+    escape marker (or comment the line out altogether).
+    """
+    given = """f <- function(x) {
+  !x
+}"""
+
+    response: HTTPResponse = await request_format(
+        formatter=formatter,
+        code=[given],
+        options=options,
+    )
+    json_result = _check_http_code_and_schema(
+        response=response,
+        expected_code=200,
+        expected_schema=EXPECTED_FROMAT_SCHEMA,
+    )
+    assert json_result["code"][0]["code"] == given
+
+
 @pytest.mark.skip(
     reason="rust toolchain doesn't seem to be picked up here for some reason."
 )
