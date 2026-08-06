@@ -24,4 +24,14 @@ SERVER_FORMATTERS["example"] = ExampleCustomFormatter()
 
 When implementing your customer formatter using third party library, you will likely use `try... except` in the `importable` block instead of always returning `True`.
 
+The `handle_line_ending_and_magic` decorator hides IPython-specific syntax (magics, shell
+commands with `!`, `?` help lines) from the formatter. This only makes sense for Python, so
+formatters for other languages should declare which language they format:
+
+```python
+class ExampleRustFormatter(BaseFormatter):
+    language = "rust"
+    ...
+```
+
 Remember you are always welcomed to submit a pull request!

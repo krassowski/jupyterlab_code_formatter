@@ -45,6 +45,10 @@ INCOMPATIBLE_MAGIC_LANGUAGES = [
 
 
 class BaseFormatter(abc.ABC):
+    # Language of the code this formatter is meant to be used with; it decides
+    # which line escapers (see `BaseLineEscaper.langs`) get applied to the code.
+    language: str = "python"
+
     @property
     @abc.abstractmethod
     def label(self) -> str:
@@ -85,10 +89,19 @@ class BaseLineEscaper(abc.ABC):
         pass
 
 
+def _unescape_line(line: str, escaped_line_start: str) -> str:
+    """Remove the escape marker, if any, from a formatted line."""
+    stripped = line.lstrip()
+    if stripped.startswith(escaped_line_start):
+        # the original indentation is part of the escaped line, so any
+        # indentation added by the formatter is dropped along with the marker
+        line = stripped[len(escaped_line_start) :]
+    return line
+
+
 class MagicCommandEscaper(BaseLineEscaper):
     langs = ["python"]
     escaped_line_start = "# \x01 "
-    unesacpe_start = len(escaped_line_start)
 
     def escape(self, line: str) -> str:
         if line.lstrip().startswith("%"):
@@ -96,15 +109,12 @@ class MagicCommandEscaper(BaseLineEscaper):
         return line
 
     def unescape(self, line: str) -> str:
-        if line.lstrip().startswith(self.escaped_line_start):
-            line = line[self.unesacpe_start :]
-        return line
+        return _unescape_line(line, self.escaped_line_start)
 
 
 class RunScriptEscaper(BaseLineEscaper):
     langs = ["python"]
     escaped_line_start = "# \x01 "
-    unesacpe_start = len(escaped_line_start)
 
     def escape(self, line: str) -> str:
         if re.match(pattern=r"run\s+\w+", string=line.lstrip()):
@@ -112,15 +122,12 @@ class RunScriptEscaper(BaseLineEscaper):
         return line
 
     def unescape(self, line: str) -> str:
-        if line.lstrip().startswith(self.escaped_line_start):
-            line = line[self.unesacpe_start :]
-        return line
+        return _unescape_line(line, self.escaped_line_start)
 
 
 class HelpEscaper(BaseLineEscaper):
     langs = ["python"]
     escaped_line_start = "# \x01 "
-    unesacpe_start = len(escaped_line_start)
 
     def escape(self, line: str) -> str:
         lstripped = line.lstrip()
@@ -134,15 +141,12 @@ class HelpEscaper(BaseLineEscaper):
         return line
 
     def unescape(self, line: str) -> str:
-        if line.lstrip().startswith(self.escaped_line_start):
-            line = line[self.unesacpe_start :]
-        return line
+        return _unescape_line(line, self.escaped_line_start)
 
 
 class CommandEscaper(BaseLineEscaper):
     langs = ["python"]
     escaped_line_start = "# \x01 "
-    unesacpe_start = len(escaped_line_start)
 
     def escape(self, line: str) -> str:
         if line.lstrip().startswith("!"):
@@ -150,15 +154,12 @@ class CommandEscaper(BaseLineEscaper):
         return line
 
     def unescape(self, line: str) -> str:
-        if line.lstrip().startswith(self.escaped_line_start):
-            line = line[self.unesacpe_start :]
-        return line
+        return _unescape_line(line, self.escaped_line_start)
 
 
 class QuartoCommentEscaper(BaseLineEscaper):
     langs = ["python"]
     escaped_line_start = "# \x01 "
-    unesacpe_start = len(escaped_line_start)
 
     def escape(self, line: str) -> str:
         if line.lstrip().startswith("#| "):
@@ -166,9 +167,7 @@ class QuartoCommentEscaper(BaseLineEscaper):
         return line
 
     def unescape(self, line: str) -> str:
-        if line.lstrip().startswith(self.escaped_line_start):
-            line = line[self.unesacpe_start :]
-        return line
+        return _unescape_line(line, self.escaped_line_start)
 
 
 ESCAPER_CLASSES: List[Type[BaseLineEscaper]] = [
@@ -192,7 +191,12 @@ def handle_line_ending_and_magic(func):
 
         has_semicolon = code.strip().endswith(";")
 
-        escapers = [escaper_cls(code) for escaper_cls in ESCAPER_CLASSES]
+        language = getattr(self, "language", "python").lower()
+        escapers = [
+            escaper_cls(code)
+            for escaper_cls in ESCAPER_CLASSES
+            if language in escaper_cls.langs
+        ]
 
         lines = code.splitlines()
         for escaper in escapers:
@@ -355,6 +359,8 @@ class IsortFormatter(BaseFormatter):
 
 
 class RFormatter(BaseFormatter):
+    language = "r"
+
     @property
     @abc.abstractmethod
     def package_name(self) -> str:
@@ -440,8 +446,9 @@ class FormatterError(Exception):
 class CommandLineFormatter(BaseFormatter):
     command: List[str]
 
-    def __init__(self, command: List[str]):
+    def __init__(self, command: List[str], language: str = "python"):
         self.command = command
+        self.language = language
 
     @property
     def label(self) -> str:
@@ -506,7 +513,7 @@ SERVER_FORMATTERS = {
     "ruffformat": RuffFormatFormatter(),
     "formatR": FormatRFormatter(),
     "styler": StylerFormatter(),
-    "scalafmt": CommandLineFormatter(command=["scalafmt", "--stdin"]),
-    "rustfmt": CommandLineFormatter(command=["rustfmt"]),
-    "astyle": CommandLineFormatter(command=["astyle"]),
+    "scalafmt": CommandLineFormatter(command=["scalafmt", "--stdin"], language="scala"),
+    "rustfmt": CommandLineFormatter(command=["rustfmt"], language="rust"),
+    "astyle": CommandLineFormatter(command=["astyle"], language="c++"),
 }
