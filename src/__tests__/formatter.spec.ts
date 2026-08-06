@@ -64,6 +64,13 @@ describe('JupyterlabCodeFormatter', () => {
       );
     });
 
+    it('should ignore the properties inherited from the prototype', () => {
+      const config = makeConfig({ python: 'black' });
+      expect(() => formatter.resolve(config, 'constructor')).toThrow(
+        'Unable to find default formatters to use'
+      );
+    });
+
     it('should raise if the language is unknown', () => {
       const config = makeConfig({ python: 'black' });
       expect(() => formatter.resolve(config, null)).toThrow(
