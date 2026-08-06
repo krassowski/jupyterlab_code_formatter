@@ -100,7 +100,9 @@ def _unescape_line(line: str, escaped_line_start: str) -> str:
 
 
 class MagicCommandEscaper(BaseLineEscaper):
-    langs = ["python"]
+    # magics are a notebook-level construct which can wrap a cell of another
+    # language (e.g. `%%R`), and the escape marker is a comment in R too
+    langs = ["python", "r"]
     escaped_line_start = "# \x01 "
 
     def escape(self, line: str) -> str:
@@ -158,7 +160,8 @@ class CommandEscaper(BaseLineEscaper):
 
 
 class QuartoCommentEscaper(BaseLineEscaper):
-    langs = ["python"]
+    # Quarto cell options use the same syntax in R as they do in Python
+    langs = ["python", "r"]
     escaped_line_start = "# \x01 "
 
     def escape(self, line: str) -> str:
