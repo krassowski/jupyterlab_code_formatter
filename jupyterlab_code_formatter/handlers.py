@@ -28,19 +28,40 @@ class FormattersAPIHandler(APIHandler):
 
 
 class FormatAPIHandler(APIHandler):
+    def _finish_with_error(self, status_code: int, message: str) -> None:
+        """Report an error as JSON, as the other Jupyter Server APIs do.
+
+        A plain-text reason in the status line is not reliably available to the
+        client (it is dropped by HTTP/2 and by some proxies), so the message is
+        sent in the body instead.
+        """
+        self.set_status(status_code)
+        self.finish(json.dumps({"message": message}))
+
     @tornado.web.authenticated
     def post(self) -> None:
         data = json.loads(self.request.body.decode("utf-8"))
-        formatter_instance = SERVER_FORMATTERS.get(data["formatter"])
+        formatter_name = data["formatter"]
+        formatter_instance = SERVER_FORMATTERS.get(formatter_name)
         use_cache = self.get_query_argument("cached", default=None)
 
-        if formatter_instance is None or not (
+        if formatter_instance is None:
+            known = ", ".join(sorted(SERVER_FORMATTERS))
+            self._finish_with_error(
+                404,
+                f"Formatter {formatter_name!r} is unknown, please check the "
+                f"`default_formatter` setting; known formatters are: {known}.",
+            )
+        elif not (
             formatter_instance.cached_importable
             if use_cache
             else formatter_instance.importable
         ):
-            self.set_status(404, f"Formatter {data['formatter']} not found!")
-            self.finish()
+            self._finish_with_error(
+                404,
+                f"Formatter {formatter_name!r} is not available, please make sure "
+                "that it is installed in the environment running Jupyter Server.",
+            )
         else:
             notebook = data["notebook"]
             options = data.get("options", {})
