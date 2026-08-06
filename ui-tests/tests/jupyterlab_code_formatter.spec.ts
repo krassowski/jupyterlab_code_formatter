@@ -6,12 +6,23 @@ import {
 } from '@jupyterlab/galata';
 
 /**
- * Create a Python notebook with the given cells and open it.
+ * The kernel specifications of the notebooks used in the tests.
+ */
+const KERNELSPECS = {
+  python: { display_name: 'Python 3', language: 'python', name: 'python3' },
+  // The language reported by IRkernel is capitalised, unlike the language of
+  // most other kernels; see https://github.com/jupyterlab-contrib/jupyterlab_code_formatter/issues/327
+  R: { display_name: 'R', language: 'R', name: 'ir' }
+};
+
+/**
+ * Create a notebook with the given cells and open it.
  */
 const openNotebook = async (
   page: IJupyterLabPageFixture,
   path: string,
-  cells: (string | { markdown: string })[]
+  cells: (string | { markdown: string })[],
+  kernelspec = KERNELSPECS.python
 ) => {
   const content = {
     cells: cells.map(cell =>
@@ -26,12 +37,8 @@ const openNotebook = async (
         : { cell_type: 'markdown', metadata: {}, source: cell.markdown }
     ),
     metadata: {
-      kernelspec: {
-        display_name: 'Python 3',
-        language: 'python',
-        name: 'python3'
-      },
-      language_info: { name: 'python' }
+      kernelspec,
+      language_info: { name: kernelspec.language }
     },
     nbformat: 4,
     nbformat_minor: 5
@@ -47,6 +54,17 @@ const openNotebook = async (
       ),
     path
   );
+};
+
+/**
+ * Dismiss the kernel selection dialog shown when the kernel of the notebook is
+ * not installed, keeping the notebook open without a kernel.
+ */
+const dismissKernelSelection = async (page: IJupyterLabPageFixture) => {
+  const dialog = page.locator('.jp-Dialog');
+  await dialog.waitFor();
+  await dialog.locator('.jp-Dialog-button', { hasText: 'No Kernel' }).click();
+  await dialog.waitFor({ state: 'detached' });
 };
 
 /**
@@ -287,3 +305,46 @@ test.describe('Format on save', () => {
     );
   });
 });
+
+// The default formatter of a notebook is looked up by the language reported by
+// its kernel, the case of which does not always match the case of the language
+// used as key in the settings (`R` in the defaults, `r` as reported by the
+// kernel of an IRkernel notebook). Both spellings should work.
+for (const key of ['R', 'r']) {
+  test.describe(`Default formatter keyed by \`${key}\``, () => {
+    test.use({
+      mockSettings: {
+        ...galata.DEFAULT_SETTINGS,
+        'jupyterlab_code_formatter:settings': {
+          preferences: {
+            // `black` stands in for an R formatter here: the R formatters
+            // require an R installation, and what is under test is the
+            // resolution of the language to a formatter, not the formatting.
+            default_formatter: { [key]: 'black' }
+          }
+        }
+      }
+    });
+
+    test('should format an R notebook', async ({ page, tmpPath }) => {
+      const path = `${tmpPath}/r_notebook_${key}.ipynb`;
+      await openNotebook(page, path, ['x  =  1'], KERNELSPECS.R);
+      await dismissKernelSelection(page);
+
+      const result = await executeCommand(
+        page,
+        'jupyterlab_code_formatter:format_all',
+        { path }
+      );
+
+      expect(result).toEqual({
+        path,
+        formatters: ['black'],
+        considered: 1,
+        changed: 1,
+        errors: []
+      });
+      expect(await page.notebook.getCellTextInput(0)).toBe('x = 1');
+    });
+  });
+}
