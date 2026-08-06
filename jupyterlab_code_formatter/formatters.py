@@ -47,6 +47,7 @@ INCOMPATIBLE_MAGIC_LANGUAGES = [
 class BaseFormatter(abc.ABC):
     # Language of the code this formatter is meant to be used with; it decides
     # which line escapers (see `BaseLineEscaper.langs`) get applied to the code.
+    # A language which no escaper declares is formatted without any escaping.
     language: str = "python"
 
     @property
@@ -199,7 +200,11 @@ def handle_line_ending_and_magic(func):
 
         has_semicolon = code.strip().endswith(";")
 
+        # `getattr` rather than `self.language` because the decorator can be applied to
+        # formatters which do not subclass `BaseFormatter`, where the default lives
         language = getattr(self, "language", "python").lower()
+        # escapers are instantiated before filtering so that a custom escaper is free to
+        # set `langs` in `__init__` rather than on the class
         escapers = [
             escaper
             for escaper in (escaper_cls(code) for escaper_cls in ESCAPER_CLASSES)
@@ -523,5 +528,7 @@ SERVER_FORMATTERS = {
     "styler": StylerFormatter(),
     "scalafmt": CommandLineFormatter(command=["scalafmt", "--stdin"], language="scala"),
     "rustfmt": CommandLineFormatter(command=["rustfmt"], language="rust"),
+    # `astyle` also handles C, C#, Java and Objective-C, but the language only selects
+    # escapers and none of these have any, so a single name covers them all
     "astyle": CommandLineFormatter(command=["astyle"], language="c++"),
 }
