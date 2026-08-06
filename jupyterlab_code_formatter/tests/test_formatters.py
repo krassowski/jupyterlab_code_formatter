@@ -80,10 +80,17 @@ class IndentingFormatter(EchoFormatter):
         return "\n".join(" " * self.indent + line for line in code.splitlines())
 
 
-IPYTHON_ONLY_SYNTAX = ["!ls", "%time x = 1", "x?", "run script.py", "#| eval: false"]
+IPYTHON_ONLY_SYNTAX = ["!ls", "x?", "run script.py"]
+
+# magics and Quarto cell options are not Python syntax either, but unlike the above
+# they can wrap (or annotate) a cell written in another language
+CELL_LEVEL_SYNTAX = ["%time x = 1", "%%R", "#| eval: false"]
+
+# languages in which `# \x01 ` (the escape marker) is not a comment
+LANGUAGES_WITHOUT_HASH_COMMENTS = ["rust", "scala", "c++"]
 
 
-@pytest.mark.parametrize("code", IPYTHON_ONLY_SYNTAX)
+@pytest.mark.parametrize("code", IPYTHON_ONLY_SYNTAX + CELL_LEVEL_SYNTAX)
 def test_escapes_ipython_syntax_for_python(code):
     """IPython-specific syntax should be hidden from Python formatters."""
     formatter = EchoFormatter(language="python")
@@ -92,9 +99,32 @@ def test_escapes_ipython_syntax_for_python(code):
 
 
 @pytest.mark.parametrize("code", IPYTHON_ONLY_SYNTAX)
-@pytest.mark.parametrize("language", ["r", "R", "rust", "scala", "c++"])
+@pytest.mark.parametrize("language", ["r", "R"] + LANGUAGES_WITHOUT_HASH_COMMENTS)
 def test_does_not_escape_ipython_syntax_for_other_languages(code, language):
     """IPython-specific syntax does not exist in other languages, see issue #407."""
+    formatter = EchoFormatter(language=language)
+    assert formatter.format_code(code, notebook=True) == code
+    assert formatter.seen == [code]
+
+
+@pytest.mark.parametrize("code", CELL_LEVEL_SYNTAX)
+@pytest.mark.parametrize("language", ["r", "R"])
+def test_escapes_cell_level_syntax_for_r(code, language):
+    """Magics and Quarto options must stay hidden from R formatters.
+
+    `%%R` can wrap an R cell in a Python notebook and `#|` is how Quarto
+    annotates R cells; neither is valid R, and the escape marker is a
+    comment in R just as it is in Python.
+    """
+    formatter = EchoFormatter(language=language)
+    assert formatter.format_code(code, notebook=True) == code
+    assert formatter.seen == [f"# \x01 {code}"]
+
+
+@pytest.mark.parametrize("code", CELL_LEVEL_SYNTAX)
+@pytest.mark.parametrize("language", LANGUAGES_WITHOUT_HASH_COMMENTS)
+def test_does_not_escape_cell_level_syntax_without_hash_comments(code, language):
+    """Escaping with `#` would corrupt languages which do not comment with it."""
     formatter = EchoFormatter(language=language)
     assert formatter.format_code(code, notebook=True) == code
     assert formatter.seen == [code]
