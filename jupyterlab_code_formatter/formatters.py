@@ -92,10 +92,15 @@ class BaseLineEscaper(abc.ABC):
 def _unescape_line(line: str, escaped_line_start: str) -> str:
     """Remove the escape marker, if any, from a formatted line."""
     stripped = line.lstrip()
-    if stripped.startswith(escaped_line_start):
-        # the original indentation is part of the escaped line, so any
-        # indentation added by the formatter is dropped along with the marker
-        line = stripped[len(escaped_line_start) :]
+    # `formatR` deparses comments through R, which rewrites the non-printable
+    # character of the marker as its octal escape sequence, hence both forms
+    # need to be recognised here
+    variants = (escaped_line_start, escaped_line_start.replace("\x01", "\\001"))
+    for marker in variants:
+        if stripped.startswith(marker):
+            # the original indentation is part of the escaped line, so any
+            # indentation added by the formatter is dropped along with the marker
+            return stripped[len(marker) :]
     return line
 
 

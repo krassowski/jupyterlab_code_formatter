@@ -80,6 +80,21 @@ class IndentingFormatter(EchoFormatter):
         return "\n".join(" " * self.indent + line for line in code.splitlines())
 
 
+class MarkerManglingFormatter(EchoFormatter):
+    r"""A formatter which escapes the marker, like `formatR` does with comments.
+
+    `formatR` round-trips comments through R, whose deparser rewrites the
+    non-printable character of the marker as its octal escape sequence.
+    """
+
+    label = "Apply Marker Mangling Formatter"
+
+    @handle_line_ending_and_magic
+    def format_code(self, code: str, notebook: bool, **options) -> str:
+        self.seen.append(code)
+        return code.replace("\x01", "\\001")
+
+
 IPYTHON_ONLY_SYNTAX = ["!ls", "x?", "run script.py"]
 
 # magics and Quarto cell options are not Python syntax either, but unlike the above
@@ -128,6 +143,13 @@ def test_does_not_escape_cell_level_syntax_without_hash_comments(code, language)
     formatter = EchoFormatter(language=language)
     assert formatter.format_code(code, notebook=True) == code
     assert formatter.seen == [code]
+
+
+@pytest.mark.parametrize("code", CELL_LEVEL_SYNTAX)
+def test_unescapes_lines_with_marker_mangled_by_formatter(code):
+    """Formatters may rewrite the marker itself, which must still be unescaped."""
+    formatter = MarkerManglingFormatter(language="r")
+    assert formatter.format_code(code, notebook=True) == code
 
 
 @pytest.mark.parametrize("indent", range(1, 6))
